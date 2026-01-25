@@ -14,10 +14,12 @@ import {
     Events,
     Message,
     TextChannel,
-    ThreadAutoArchiveDuration
+    ThreadAutoArchiveDuration,
+    Interaction,
 } from 'discord.js';
 import { claudeQueue } from './queue.js';
 import { db } from './db.js';
+import { startApiServer, buttonHandlers } from './api.js';
 
 // Force unbuffered logging
 const log = (msg: string) => process.stdout.write(`[bot] ${msg}\n`);
@@ -32,6 +34,49 @@ const client = new Client({
 
 client.once(Events.ClientReady, (c) => {
     log(`Logged in as ${c.user.tag}`);
+
+    // Start HTTP API server
+    const apiPort = parseInt(process.env.API_PORT || '2643');
+    startApiServer(client, apiPort);
+});
+
+// Handle button interactions
+client.on(Events.InteractionCreate, async (interaction: Interaction) => {
+    if (!interaction.isButton()) return;
+
+    const handler = buttonHandlers.get(interaction.customId);
+    if (!handler) {
+        await interaction.reply({ content: 'This button has expired.', ephemeral: true });
+        return;
+    }
+
+    try {
+        if (handler.type === 'inline') {
+            await interaction.reply({
+                content: handler.content,
+                ephemeral: handler.ephemeral ?? false,
+            });
+        } else if (handler.type === 'webhook') {
+            await interaction.deferReply({ ephemeral: true });
+            const response = await fetch(handler.url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    customId: interaction.customId,
+                    userId: interaction.user.id,
+                    channelId: interaction.channelId,
+                    data: handler.data,
+                }),
+            });
+            const result = await response.json() as { content?: string };
+            await interaction.editReply({ content: result.content || 'Done.' });
+        }
+    } catch (error) {
+        log(`Button handler error: ${error}`);
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ content: 'An error occurred.', ephemeral: true });
+        }
+    }
 });
 
 client.on(Events.MessageCreate, async (message: Message) => {
