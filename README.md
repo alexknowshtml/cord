@@ -118,6 +118,31 @@ claude --print --resume UUID -p "prompt"
 claude --append-system-prompt "Current time: ..."
 ```
 
+## HTTP API
+
+Cord exposes an HTTP API on port 2643 for external tools to interact with Discord:
+
+- **Send messages** - Text, embeds, file attachments
+- **Interactive buttons** - With inline or webhook handlers
+- **Typing indicators** - Show typing before slow operations
+- **Edit/delete messages** - Modify existing messages
+- **Rename threads** - Update thread names
+
+See [skills/cord/PRIMITIVES.md](./skills/cord/PRIMITIVES.md) for full API documentation.
+
+## Claude Code Skill
+
+Cord includes a Claude Code skill that teaches Claude how to use the HTTP API:
+
+```bash
+# Copy to your Claude Code skills folder
+cp -r skills/cord ~/.claude/skills/
+```
+
+Once installed, Claude Code automatically knows how to send Discord messages, embeds, and buttons when you ask.
+
+See [skills/cord/SKILL.md](./skills/cord/SKILL.md) for skill documentation.
+
 ## License
 
 MIT

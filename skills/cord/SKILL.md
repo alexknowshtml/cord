@@ -16,6 +16,8 @@ Interact with Discord through Cord's HTTP API (default port 2643). This skill te
 
 **GitHub:** https://github.com/alexknowshtml/cord
 
+**API Reference:** [PRIMITIVES.md](./PRIMITIVES.md) - Full HTTP API documentation
+
 ## Setup
 
 Ensure Cord is running:
