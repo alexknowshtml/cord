@@ -1,10 +1,16 @@
 # Cord
 
-A simple bridge that connects Discord to Claude Code CLI.
+A Discord bot that connects to Claude Code CLI, plus a Claude Code skill that lets your assistant control the bot.
 
 > **cord** /kôrd/ — a connection between two things.
 
 [![npm version](https://badge.fury.io/js/cord-bot.svg)](https://www.npmjs.com/package/cord-bot)
+
+## What You Get
+
+**Discord Bot** — @mention the bot in Discord, it spawns Claude Code to respond. Conversations happen in threads with full context preserved across messages.
+
+**Claude Code Skill** — Teaches your assistant how to send Discord messages, embeds, files, and interactive buttons. Installed automatically during setup.
 
 ## Quick Start
 
@@ -20,12 +26,6 @@ redis-server &
 cord start
 ```
 
-When someone @mentions your bot, it:
-1. Creates a thread for the conversation
-2. Queues the message for Claude processing
-3. Posts Claude's response back to the thread
-4. Remembers context for follow-up messages
-
 <details>
 <summary>Alternative: Clone from GitHub</summary>
 
@@ -37,19 +37,6 @@ cord setup
 cord start
 ```
 </details>
-
-## Architecture
-
-```
-Discord Bot  →  BullMQ Queue  →  Claude Spawner
- (Node.js)       (Redis)          (Bun)
-```
-
-- **Bot** (`src/bot.ts`): Catches @mentions, creates threads, sends to queue
-- **Queue** (`src/queue.ts`): BullMQ job queue for reliable processing
-- **Worker** (`src/worker.ts`): Pulls jobs, spawns Claude, posts responses
-- **Spawner** (`src/spawner.ts`): The Claude CLI integration (the core)
-- **DB** (`src/db.ts`): SQLite for thread→session mapping
 
 ## Prerequisites
 
@@ -73,6 +60,19 @@ Discord Bot  →  BullMQ Queue  →  Claude Spawner
 
 **Note:** This runs 100% locally. The bot connects *outbound* to Discord's gateway - no need to expose ports or use ngrok.
 
+## Architecture
+
+```
+Discord Bot  →  BullMQ Queue  →  Claude Spawner
+ (Node.js)       (Redis)          (Bun)
+```
+
+- **Bot** (`src/bot.ts`): Catches @mentions, creates threads, sends to queue
+- **Queue** (`src/queue.ts`): BullMQ job queue for reliable processing
+- **Worker** (`src/worker.ts`): Pulls jobs, spawns Claude, posts responses
+- **Spawner** (`src/spawner.ts`): The Claude CLI integration (the core)
+- **DB** (`src/db.ts`): SQLite for thread→session mapping
+
 ## Environment Variables
 
 | Variable | Required | Default | Description |
@@ -82,42 +82,6 @@ Discord Bot  →  BullMQ Queue  →  Claude Spawner
 | `REDIS_PORT` | No | `6379` | Redis server port |
 | `CLAUDE_WORKING_DIR` | No | `cwd` | Working directory for Claude |
 | `DB_PATH` | No | `./data/threads.db` | SQLite database path |
-
-## How It Works
-
-### New Mentions
-
-1. User @mentions the bot with a question
-2. Bot creates a thread from the message
-3. Bot generates a UUID session ID
-4. Bot stores thread_id → session_id in SQLite
-5. Bot queues a job with the prompt and session ID
-6. Worker picks up the job
-7. Worker spawns Claude with `--session-id UUID`
-8. Worker posts Claude's response to the thread
-
-### Follow-up Messages
-
-1. User sends another message in the thread
-2. Bot looks up the session ID from SQLite
-3. Bot queues a job with `resume: true`
-4. Worker spawns Claude with `--resume UUID`
-5. Claude has full context from previous messages
-
-## Key CLI Flags
-
-The magic is in `src/spawner.ts`:
-
-```typescript
-// For new sessions:
-claude --print --session-id UUID -p "prompt"
-
-// For follow-ups:
-claude --print --resume UUID -p "prompt"
-
-// Inject context that survives compaction:
-claude --append-system-prompt "Current time: ..."
-```
 
 ## HTTP API
 
@@ -130,12 +94,6 @@ Cord exposes an HTTP API on port 2643 for external tools to interact with Discor
 - **Rename threads** - Update thread names
 
 See [skills/cord/PRIMITIVES.md](./skills/cord/PRIMITIVES.md) for full API documentation.
-
-## Claude Code Skill
-
-Cord includes a Claude Code skill that teaches your assistant how to send Discord messages, embeds, files, and interactive buttons. It's installed automatically during setup.
-
-See [skills/cord/SKILL.md](./skills/cord/SKILL.md) for skill documentation.
 
 ## License
 
