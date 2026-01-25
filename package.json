@@ -1,10 +1,10 @@
 {
-  "name": "cord",
-  "version": "0.1.0",
+  "name": "cord-bot",
+  "version": "1.0.2",
   "module": "index.ts",
   "type": "module",
   "bin": {
-    "cord": "./bin/cord.ts"
+    "cord": "bin/cord.ts"
   },
   "scripts": {
     "start": "bun run bin/cord.ts start",
