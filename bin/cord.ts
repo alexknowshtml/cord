@@ -11,9 +11,10 @@
  */
 
 import { spawn, spawnSync } from 'bun';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, cpSync } from 'fs';
+import { join, dirname } from 'path';
 import * as readline from 'readline';
+import { homedir } from 'os';
 
 const PID_FILE = join(process.cwd(), '.cord.pid');
 
@@ -74,6 +75,20 @@ async function setup() {
         console.log('✓ Claude CLI installed');
     } else {
         console.log('⚠ Claude CLI not found. Install from: https://claude.ai/code');
+    }
+
+    // Install Claude Code skill
+    const skillsDir = join(homedir(), '.claude', 'skills', 'cord');
+    const cordRoot = join(dirname(import.meta.dir));
+    const sourceSkillsDir = join(cordRoot, 'skills', 'cord');
+
+    if (existsSync(sourceSkillsDir)) {
+        const installSkill = await prompt('Install Claude Code skill? (Y/n): ');
+        if (installSkill.toLowerCase() !== 'n') {
+            mkdirSync(skillsDir, { recursive: true });
+            cpSync(sourceSkillsDir, skillsDir, { recursive: true });
+            console.log(`✓ Skill installed to ${skillsDir}`);
+        }
     }
 
     console.log('\n✨ Setup complete! Run: cord start\n');
