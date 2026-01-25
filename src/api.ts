@@ -288,6 +288,51 @@ async function handleCommand(
             return { success: true };
         }
 
+        case 'reply-to-message': {
+            const channelId = args.channel as string;
+            const messageId = args.message as string;
+            const content = args.content as string;
+
+            const channel = await client.channels.fetch(channelId);
+            if (!channel?.isTextBased()) {
+                throw new Error('Invalid channel');
+            }
+
+            const targetMessage = await (channel as TextChannel).messages.fetch(messageId);
+            const sent = await targetMessage.reply(content);
+            return { success: true, messageId: sent.id };
+        }
+
+        case 'create-thread': {
+            const channelId = args.channel as string;
+            const messageId = args.message as string;
+            const name = args.name as string;
+
+            const channel = await client.channels.fetch(channelId);
+            if (!channel?.isTextBased()) {
+                throw new Error('Invalid channel');
+            }
+
+            const message = await (channel as TextChannel).messages.fetch(messageId);
+            const thread = await message.startThread({ name });
+            return { success: true, threadId: thread.id };
+        }
+
+        case 'add-reaction': {
+            const channelId = args.channel as string;
+            const messageId = args.message as string;
+            const emoji = args.emoji as string;
+
+            const channel = await client.channels.fetch(channelId);
+            if (!channel?.isTextBased()) {
+                throw new Error('Invalid channel');
+            }
+
+            const message = await (channel as TextChannel).messages.fetch(messageId);
+            await message.react(emoji);
+            return { success: true };
+        }
+
         default:
             throw new Error(`Unknown command: ${command}`);
     }

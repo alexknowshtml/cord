@@ -1,6 +1,6 @@
-# Discord Primitives
+# HTTP API Reference
 
-HTTP API for interacting with Discord from scripts and Claude skills.
+Low-level HTTP API for interacting with Discord. For Claude Code, use the CLI commands in [SKILL.md](./SKILL.md) instead.
 
 **Port:** `2643` (configurable via `API_PORT` env var)
 
@@ -197,6 +197,57 @@ curl -X POST http://localhost:2643/command \
     "args": {
       "thread": "THREAD_ID",
       "name": "New Thread Name"
+    }
+  }'
+```
+
+## reply-to-message
+
+Reply to a specific message (shows reply preview).
+
+```bash
+curl -X POST http://localhost:2643/command \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "command": "reply-to-message",
+    "args": {
+      "channel": "CHANNEL_ID",
+      "message": "MESSAGE_ID",
+      "content": "This is a reply"
+    }
+  }'
+```
+
+## create-thread
+
+Create a thread from a message.
+
+```bash
+curl -X POST http://localhost:2643/command \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "command": "create-thread",
+    "args": {
+      "channel": "CHANNEL_ID",
+      "message": "MESSAGE_ID",
+      "name": "Thread Name"
+    }
+  }'
+```
+
+## add-reaction
+
+Add a reaction to a message.
+
+```bash
+curl -X POST http://localhost:2643/command \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "command": "add-reaction",
+    "args": {
+      "channel": "CHANNEL_ID",
+      "message": "MESSAGE_ID",
+      "emoji": "👍"
     }
   }'
 ```

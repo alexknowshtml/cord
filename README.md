@@ -83,17 +83,31 @@ Discord Bot  →  BullMQ Queue  →  Claude Spawner
 | `CLAUDE_WORKING_DIR` | No | `cwd` | Working directory for Claude |
 | `DB_PATH` | No | `./data/threads.db` | SQLite database path |
 
+## CLI Commands
+
+Once running, Cord provides CLI commands for interacting with Discord:
+
+```bash
+cord send <channel> "message"           # Send a message
+cord embed <channel> "text" --title "T" # Send formatted embed
+cord file <channel> ./report.md         # Send file attachment
+cord buttons <channel> "Pick:" --button label="Yes" id="yes" style="success"
+cord typing <channel>                   # Show typing indicator
+cord edit <channel> <msgId> "new text"  # Edit message
+cord delete <channel> <msgId>           # Delete message
+cord reply <channel> <msgId> "reply"    # Reply to message
+cord react <channel> <msgId> "emoji"    # Add reaction
+cord thread <channel> <msgId> "name"    # Create thread
+cord rename <threadId> "new name"       # Rename thread
+```
+
+See [skills/cord/SKILL.md](./skills/cord/SKILL.md) for full CLI documentation.
+
 ## HTTP API
 
-Cord exposes an HTTP API on port 2643 for external tools to interact with Discord:
+Cord also exposes an HTTP API on port 2643 for external scripts and webhooks.
 
-- **Send messages** - Text, embeds, file attachments
-- **Interactive buttons** - With inline or webhook handlers
-- **Typing indicators** - Show typing before slow operations
-- **Edit/delete messages** - Modify existing messages
-- **Rename threads** - Update thread names
-
-See [skills/cord/PRIMITIVES.md](./skills/cord/PRIMITIVES.md) for full API documentation.
+See [skills/cord/HTTP-API.md](./skills/cord/HTTP-API.md) for API documentation.
 
 ## License
 
