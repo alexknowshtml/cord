@@ -20,6 +20,7 @@
  *   cord reply <channel> <messageId> "message"
  *   cord thread <channel> <messageId> "name"
  *   cord react <channel> <messageId> "emoji"
+ *   cord state <channel> <messageId> <state>  (processing, done, error, or custom)
  */
 
 import { spawn, spawnSync } from 'bun';
@@ -375,6 +376,47 @@ async function addReaction() {
     console.log(`Added reaction: ${emoji}`);
 }
 
+// State presets for thread status updates
+const STATE_PRESETS: Record<string, string> = {
+    processing: '🤖 Processing...',
+    thinking: '🧠 Thinking...',
+    searching: '🔍 Searching...',
+    writing: '✍️ Writing...',
+    done: '✅ Done',
+    error: '❌ Something went wrong',
+    waiting: '⏳ Waiting for input...',
+};
+
+async function updateState() {
+    const channel = args[0];
+    const messageId = args[1];
+    const stateOrCustom = args[2];
+
+    if (!channel || !messageId || !stateOrCustom) {
+        console.error('Usage: cord state <channel> <messageId> <state>');
+        console.error('');
+        console.error('Preset states:');
+        console.error('  processing  - 🤖 Processing...');
+        console.error('  thinking    - 🧠 Thinking...');
+        console.error('  searching   - 🔍 Searching...');
+        console.error('  writing     - ✍️ Writing...');
+        console.error('  done        - ✅ Done');
+        console.error('  error       - ❌ Something went wrong');
+        console.error('  waiting     - ⏳ Waiting for input...');
+        console.error('');
+        console.error('Or use custom text: cord state <channel> <messageId> "Custom status"');
+        process.exit(1);
+    }
+
+    const content = STATE_PRESETS[stateOrCustom.toLowerCase()] || stateOrCustom;
+
+    await apiCall('/command', {
+        command: 'edit-message',
+        args: { channel, message: messageId, content },
+    });
+    console.log(`Updated state: ${content}`);
+}
+
 // ============ Management Commands ============
 
 async function setup() {
@@ -603,11 +645,17 @@ Discord Commands:
   react <channel> <messageId> "emoji"
       Add a reaction to a message
 
+  state <channel> <messageId> <state>
+      Update thread status with preset or custom text
+      Presets: processing, thinking, searching, writing, done, error, waiting
+
 Examples:
   cord send 123456789 "Hello world!"
   cord embed 123456789 "Status update" --title "Daily Report" --color green --field "Tasks:5 done:inline"
   cord buttons 123456789 "Approve?" --button label="Yes" id="approve" style="success" reply="Approved!"
   cord file 123456789 ./report.md "Here's the report"
+  cord state 123456789 1234567890 processing
+  cord state 123456789 1234567890 done
 `);
 }
 
@@ -667,6 +715,9 @@ switch (command) {
         break;
     case 'react':
         addReaction();
+        break;
+    case 'state':
+        updateState();
         break;
 
     default:

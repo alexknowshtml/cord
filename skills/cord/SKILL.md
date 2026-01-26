@@ -223,6 +223,40 @@ cord react 123456789 987654321 "👍"
 
 ---
 
+### state
+
+Update a message with a status indicator. Use this to show work progress on a thread starter or status message.
+
+```bash
+cord state <channel> <messageId> <state>
+```
+
+**Preset states:**
+| State | Display |
+|-------|---------|
+| `processing` | 🤖 Processing... |
+| `thinking` | 🧠 Thinking... |
+| `searching` | 🔍 Searching... |
+| `writing` | ✍️ Writing... |
+| `done` | ✅ Done |
+| `error` | ❌ Something went wrong |
+| `waiting` | ⏳ Waiting for input... |
+
+**Examples:**
+
+Using presets:
+```bash
+cord state 123456789 987654321 processing
+cord state 123456789 987654321 done
+```
+
+Custom status:
+```bash
+cord state 123456789 987654321 "🔄 Syncing database..."
+```
+
+---
+
 ## Choosing the Right Command
 
 | Use Case | Command |
@@ -231,7 +265,8 @@ cord react 123456789 987654321 "👍"
 | Formatted status update | `cord embed` |
 | Long content (logs, reports) | `cord file` |
 | User needs to make a choice | `cord buttons` |
-| Indicate processing | `cord typing` |
+| Indicate processing (typing bubble) | `cord typing` |
+| Update thread/message status | `cord state` |
 | Update previous message | `cord edit` |
 | Start a focused discussion | `cord thread` |
 | Quick acknowledgment | `cord react` |
@@ -263,15 +298,21 @@ cord buttons 123456789 "What would you like to do?" \
 # Start with typing indicator
 cord typing 123456789
 
-# Send initial status
-MSGID=$(cord send 123456789 "Processing... 0%" | grep -o '[0-9]*$')
+# Send initial status message
+MSGID=$(cord send 123456789 "🤖 Processing..." | grep -o '[0-9]*$')
 
-# Update as progress continues
-cord edit 123456789 $MSGID "Processing... 50%"
-cord edit 123456789 $MSGID "Processing... 100% Complete!"
+# Update state as work progresses
+cord state 123456789 $MSGID searching
+cord state 123456789 $MSGID writing
+cord state 123456789 $MSGID done
+```
 
-# Add completion reaction
-cord react 123456789 $MSGID "✅"
+Or with custom progress:
+```bash
+cord state 123456789 $MSGID "🔄 Step 1/3: Fetching data..."
+cord state 123456789 $MSGID "🔄 Step 2/3: Processing..."
+cord state 123456789 $MSGID "🔄 Step 3/3: Generating report..."
+cord state 123456789 $MSGID done
 ```
 
 ### Report delivery
