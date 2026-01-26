@@ -130,19 +130,33 @@ client.on(Events.MessageCreate, async (message: Message) => {
 
     log(`New mention from ${message.author.tag}`);
 
-    // Create a thread for the conversation
+    // Post status message in channel, then create thread from it
+    // This allows us to update the status message later (Processing... → Done)
+    let statusMessage;
     let thread;
     try {
+        // Post status message in the channel
+        statusMessage = await (message.channel as TextChannel).send('🤖 Processing...');
+
         // Generate thread name from message content
         const rawText = message.content.replace(/<@!?\d+>/g, '').trim();
         const threadName = rawText.length > 50
             ? rawText.slice(0, 47) + '...'
             : rawText || 'New conversation';
 
-        thread = await message.startThread({
+        // Create thread from the status message
+        thread = await statusMessage.startThread({
             name: threadName,
             autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
         });
+
+        // Copy the original message content into the thread for context
+        // (excluding the bot mention and the status message)
+        const originalMessages = await message.channel.messages.fetch({ limit: 10 });
+        const userMessage = originalMessages.find(m => m.id === message.id);
+        if (userMessage) {
+            await thread.send(`**${message.author.tag}:** ${rawText}`);
+        }
     } catch (error) {
         log(`Failed to create thread: ${error}`);
         await message.reply('Failed to start thread. Try again?');
@@ -153,6 +167,7 @@ client.on(Events.MessageCreate, async (message: Message) => {
     const sessionId = crypto.randomUUID();
 
     // Store the thread → session mapping
+    // Note: thread.id === statusMessage.id because thread was created from that message
     db.run(
         'INSERT INTO threads (thread_id, session_id) VALUES (?, ?)',
         [thread.id, sessionId]
