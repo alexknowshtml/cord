@@ -1,6 +1,6 @@
 # Cord
 
-A Discord bot that connects to Claude Code CLI, plus a Claude Code skill that lets your assistant control the bot.
+A Discord harness for Claude Code. Thread-based conversations, interactive elements, works anywhere you already run Claude.
 
 > **cord** /kôrd/ — a connection between two things.
 
@@ -11,11 +11,14 @@ A Discord bot that connects to Claude Code CLI, plus a Claude Code skill that le
   <img src="docs/screenshot-thread.png" alt="Thread with rich embeds" width="300" />
 </p>
 
+Uses Discord threads for individual Claude Code sessions. No exposed ports — runs outbound over the Discord bot API. Works with your Max plan on any machine that can run Claude Code CLI.
+
 ## What You Get
 
-**Discord Bot** — @mention the bot in Discord, it spawns Claude Code to respond. Conversations happen in threads with full context preserved across messages.
-
-**Claude Code Skill** — Teaches your assistant to use the bot to send messages, embeds, files, and interactive buttons. Installed automatically during setup. No MCP server needed.
+- **Thread-based sessions** — Each @mention spawns a Claude Code session in its own thread with full context preserved
+- **Rich interactions** — Embeds, buttons, file attachments, status tracking
+- **Status visibility** — See "Processing → Done" right in the channel without opening threads
+- **Claude Code skill** — Teaches your assistant the commands. No MCP server needed.
 
 ## Quick Start
 
