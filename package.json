@@ -1,6 +1,11 @@
 {
   "name": "cord-bot",
   "version": "1.0.5",
+  "description": "Discord bot that bridges messages to Claude Code sessions",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alexknowshtml/cord"
+  },
   "module": "index.ts",
   "type": "module",
   "bin": {
