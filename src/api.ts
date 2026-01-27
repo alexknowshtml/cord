@@ -152,6 +152,9 @@ export function startApiServer(client: Client, port: number = 2643) {
                         // Register handler if provided
                         if (b.handler) {
                             buttonHandlers.set(b.customId, b.handler);
+                            log(`Registered button handler: ${b.customId}`);
+                        } else {
+                            log(`No handler for button: ${b.customId}`);
                         }
                         return new ButtonBuilder()
                             .setCustomId(b.customId)

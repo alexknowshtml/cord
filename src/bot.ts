@@ -45,8 +45,11 @@ client.once(Events.ClientReady, (c) => {
 client.on(Events.InteractionCreate, async (interaction: Interaction) => {
     if (!interaction.isButton()) return;
 
+    log(`Looking up handler for: ${interaction.customId}`);
+    log(`Available handlers: ${Array.from(buttonHandlers.keys()).join(', ') || 'none'}`);
     const handler = buttonHandlers.get(interaction.customId);
     if (!handler) {
+        log(`No handler found for: ${interaction.customId}`);
         await interaction.reply({ content: 'This button has expired.', ephemeral: true });
         return;
     }
