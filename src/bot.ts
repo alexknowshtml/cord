@@ -15,14 +15,41 @@ import {
     Message,
     TextChannel,
     ThreadAutoArchiveDuration,
-    Interaction,
+    SlashCommandBuilder,
+    type Interaction,
 } from 'discord.js';
+import { existsSync } from 'fs';
+import { homedir } from 'os';
 import { claudeQueue } from './queue.js';
-import { db } from './db.js';
+import { db, getChannelConfig, setChannelConfig, getThreadWorkingDir } from './db.js';
 import { startApiServer, buttonHandlers } from './api.js';
 
 // Force unbuffered logging
 const log = (msg: string) => process.stdout.write(`[bot] ${msg}\n`);
+
+// Helper function to resolve working directory from message or channel config
+function resolveWorkingDir(message: string, channelId: string): { workingDir: string; cleanedMessage: string } {
+    // Check for [/path] prefix override
+    const pathMatch = message.match(/^\[([^\]]+)\]\s*/);
+    if (pathMatch && pathMatch[1]) {
+        return {
+            workingDir: pathMatch[1],
+            cleanedMessage: message.slice(pathMatch[0].length)
+        };
+    }
+
+    // Check channel config
+    const channelConfig = getChannelConfig(channelId);
+    if (channelConfig?.working_dir) {
+        return { workingDir: channelConfig.working_dir, cleanedMessage: message };
+    }
+
+    // Fall back to env or cwd
+    return {
+        workingDir: process.env.CLAUDE_WORKING_DIR || process.cwd(),
+        cleanedMessage: message
+    };
+}
 
 const client = new Client({
     intents: [
@@ -33,16 +60,63 @@ const client = new Client({
     ],
 });
 
-client.once(Events.ClientReady, (c) => {
+client.once(Events.ClientReady, async (c) => {
     log(`Logged in as ${c.user.tag}`);
+
+    // Register slash commands
+    const command = new SlashCommandBuilder()
+        .setName('cord')
+        .setDescription('Configure Cord bot')
+        .addSubcommand(sub =>
+            sub.setName('config')
+               .setDescription('Configure channel settings')
+               .addStringOption(opt =>
+                   opt.setName('dir')
+                      .setDescription('Working directory for Claude in this channel')
+                      .setRequired(true)
+               )
+        );
+
+    await c.application?.commands.create(command);
+    log('Slash commands registered');
 
     // Start HTTP API server
     const apiPort = parseInt(process.env.API_PORT || '2643');
     startApiServer(client, apiPort);
 });
 
-// Handle button interactions
+// Handle slash command and button interactions
 client.on(Events.InteractionCreate, async (interaction: Interaction) => {
+    // Handle /cord slash command
+    if (interaction.isChatInputCommand() && interaction.commandName === 'cord') {
+        const subcommand = interaction.options.getSubcommand();
+        if (subcommand === 'config') {
+            let dir = interaction.options.getString('dir', true);
+
+            // Expand ~ to home directory
+            if (dir.startsWith('~')) {
+                dir = dir.replace('~', homedir());
+            }
+
+            // Validate path exists
+            if (!existsSync(dir)) {
+                await interaction.reply({
+                    content: `Directory not found: \`${dir}\``,
+                    ephemeral: true
+                });
+                return;
+            }
+
+            setChannelConfig(interaction.channelId, dir);
+            await interaction.reply({
+                content: `Working directory set to \`${dir}\` for this channel.`,
+                ephemeral: true
+            });
+            log(`Channel ${interaction.channelId} configured with working dir: ${dir}`);
+        }
+        return;
+    }
+
     if (!interaction.isButton()) return;
 
     log(`Looking up handler for: ${interaction.customId}`);
@@ -96,9 +170,9 @@ client.on(Events.MessageCreate, async (message: Message) => {
     if (isInThread) {
         const thread = message.channel;
 
-        // Look up session ID for this thread
-        const mapping = db.query('SELECT session_id FROM threads WHERE thread_id = ?')
-            .get(thread.id) as { session_id: string } | null;
+        // Look up session ID and working dir for this thread
+        const mapping = db.query('SELECT session_id, working_dir FROM threads WHERE thread_id = ?')
+            .get(thread.id) as { session_id: string; working_dir: string | null } | null;
 
         if (!mapping) {
             // Not a thread we created, ignore
@@ -113,6 +187,12 @@ client.on(Events.MessageCreate, async (message: Message) => {
         // Extract message content (strip @mentions)
         const content = message.content.replace(/<@!?\d+>/g, '').trim();
 
+        // Use stored working dir or fall back to channel config / env / cwd
+        const workingDir = mapping.working_dir ||
+            getChannelConfig(thread.parentId || '')?.working_dir ||
+            process.env.CLAUDE_WORKING_DIR ||
+            process.cwd();
+
         // Queue for Claude processing with session resume
         await claudeQueue.add('process', {
             prompt: content,
@@ -121,6 +201,7 @@ client.on(Events.MessageCreate, async (message: Message) => {
             resume: true,
             userId: message.author.id,
             username: message.author.tag,
+            workingDir,
         });
 
         return;
@@ -133,19 +214,24 @@ client.on(Events.MessageCreate, async (message: Message) => {
 
     log(`New mention from ${message.author.tag}`);
 
+    // Extract message content and resolve working directory
+    const rawText = message.content.replace(/<@!?\d+>/g, '').trim();
+    const { workingDir, cleanedMessage } = resolveWorkingDir(rawText, message.channelId);
+
+    log(`Working directory: ${workingDir}`);
+
     // Post status message in channel, then create thread from it
     // This allows us to update the status message later (Processing... → Done)
     let statusMessage;
     let thread;
     try {
         // Post status message in the channel
-        statusMessage = await (message.channel as TextChannel).send('🤖 Processing...');
+        statusMessage = await (message.channel as TextChannel).send('Processing...');
 
-        // Generate thread name from message content
-        const rawText = message.content.replace(/<@!?\d+>/g, '').trim();
-        const threadName = rawText.length > 50
-            ? rawText.slice(0, 47) + '...'
-            : rawText || 'New conversation';
+        // Generate thread name from cleaned message content
+        const threadName = cleanedMessage.length > 50
+            ? cleanedMessage.slice(0, 47) + '...'
+            : cleanedMessage || 'New conversation';
 
         // Create thread from the status message
         thread = await statusMessage.startThread({
@@ -158,7 +244,7 @@ client.on(Events.MessageCreate, async (message: Message) => {
         const originalMessages = await message.channel.messages.fetch({ limit: 10 });
         const userMessage = originalMessages.find(m => m.id === message.id);
         if (userMessage) {
-            await thread.send(`**${message.author.tag}:** ${rawText}`);
+            await thread.send(`**${message.author.tag}:** ${cleanedMessage}`);
         }
     } catch (error) {
         log(`Failed to create thread: ${error}`);
@@ -169,11 +255,11 @@ client.on(Events.MessageCreate, async (message: Message) => {
     // Generate a new session ID for this conversation
     const sessionId = crypto.randomUUID();
 
-    // Store the thread → session mapping
+    // Store the thread → session mapping with working directory
     // Note: thread.id === statusMessage.id because thread was created from that message
     db.run(
-        'INSERT INTO threads (thread_id, session_id) VALUES (?, ?)',
-        [thread.id, sessionId]
+        'INSERT INTO threads (thread_id, session_id, working_dir) VALUES (?, ?, ?)',
+        [thread.id, sessionId, workingDir]
     );
 
     log(`Created thread ${thread.id} with session ${sessionId}`);
@@ -181,17 +267,15 @@ client.on(Events.MessageCreate, async (message: Message) => {
     // Show typing indicator
     await thread.sendTyping();
 
-    // Extract message content
-    const content = message.content.replace(/<@!?\d+>/g, '').trim();
-
     // Queue for Claude processing
     await claudeQueue.add('process', {
-        prompt: content,
+        prompt: cleanedMessage,
         threadId: thread.id,
         sessionId,
         resume: false,
         userId: message.author.id,
         username: message.author.tag,
+        workingDir,
     });
 });
 

@@ -24,7 +24,7 @@ const connection = new IORedis({
 const worker = new Worker<ClaudeJob>(
     'claude',
     async (job: Job<ClaudeJob>) => {
-        const { prompt, threadId, sessionId, resume, username } = job.data;
+        const { prompt, threadId, sessionId, resume, username, workingDir } = job.data;
 
         log(`Processing job ${job.id} for ${username}`);
         log(`Session: ${sessionId}, Resume: ${resume}`);
@@ -35,6 +35,7 @@ const worker = new Worker<ClaudeJob>(
                 prompt,
                 sessionId,
                 resume,
+                workingDir,
             });
 
             // Send response to Discord thread
