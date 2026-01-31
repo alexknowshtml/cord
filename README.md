@@ -81,6 +81,32 @@ Discord Bot  →  BullMQ Queue  →  Claude Spawner
 - **Spawner** (`src/spawner.ts`): The Claude CLI integration (the core)
 - **DB** (`src/db.ts`): SQLite for thread→session mapping
 
+## Working Directory Configuration
+
+Cord supports per-channel working directories so Claude operates in the correct project context.
+
+**Channel-level configuration** (persists for all conversations in that channel):
+```
+/cord config dir ~/Code/myproject
+```
+
+**Per-message override** (one-time, just for this conversation):
+```
+@bot [/other/project] what files are here?
+```
+
+**Fallback chain**: Thread override → Channel config → `CLAUDE_WORKING_DIR` env → `process.cwd()`
+
+### Security: Directory Allowlist
+
+For multi-user deployments, restrict which directories users can access:
+
+```bash
+CORD_ALLOWED_DIRS=/home/projects,/var/code
+```
+
+If not set, any existing directory is allowed (backward compatible). When set, paths outside the allowlist are rejected.
+
 ## Environment Variables
 
 | Variable | Required | Default | Description |
@@ -88,7 +114,8 @@ Discord Bot  →  BullMQ Queue  →  Claude Spawner
 | `DISCORD_BOT_TOKEN` | Yes | - | Your Discord bot token |
 | `REDIS_HOST` | No | `localhost` | Redis server host |
 | `REDIS_PORT` | No | `6379` | Redis server port |
-| `CLAUDE_WORKING_DIR` | No | `cwd` | Working directory for Claude |
+| `CLAUDE_WORKING_DIR` | No | `cwd` | Default working directory for Claude |
+| `CORD_ALLOWED_DIRS` | No | - | Comma-separated allowlist of directories (security) |
 | `DB_PATH` | No | `./data/threads.db` | SQLite database path |
 
 ## CLI Commands
