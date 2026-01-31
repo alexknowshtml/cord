@@ -20,26 +20,78 @@ import {
 } from 'discord.js';
 import { existsSync } from 'fs';
 import { homedir } from 'os';
+import { resolve } from 'path';
 import { claudeQueue } from './queue.js';
-import { db, getChannelConfig, setChannelConfig, getThreadWorkingDir } from './db.js';
+import { db, getChannelConfigCached, setChannelConfig } from './db.js';
 import { startApiServer, buttonHandlers } from './api.js';
+
+// Allowed working directories (configurable via env, comma-separated)
+// If not set, any existing directory is allowed (backward compatible)
+const ALLOWED_DIRS = process.env.CORD_ALLOWED_DIRS
+    ? process.env.CORD_ALLOWED_DIRS.split(',').map(d => resolve(d.trim()))
+    : null;
+
+/**
+ * Validate that a path is within the allowed directories.
+ * Returns null if valid, or an error message if invalid.
+ */
+function validateWorkingDir(dir: string): string | null {
+    // Resolve to absolute path
+    const resolved = resolve(dir);
+
+    // If no allowlist configured, just check existence
+    if (!ALLOWED_DIRS) {
+        if (!existsSync(resolved)) {
+            return `Directory not found: \`${dir}\``;
+        }
+        return null;
+    }
+
+    // Check against allowlist
+    const isAllowed = ALLOWED_DIRS.some(allowed =>
+        resolved === allowed || resolved.startsWith(allowed + '/')
+    );
+
+    if (!isAllowed) {
+        return `Directory not in allowed list. Allowed: ${ALLOWED_DIRS.join(', ')}`;
+    }
+
+    if (!existsSync(resolved)) {
+        return `Directory not found: \`${dir}\``;
+    }
+
+    return null;
+}
 
 // Force unbuffered logging
 const log = (msg: string) => process.stdout.write(`[bot] ${msg}\n`);
 
 // Helper function to resolve working directory from message or channel config
-function resolveWorkingDir(message: string, channelId: string): { workingDir: string; cleanedMessage: string } {
+function resolveWorkingDir(message: string, channelId: string): { workingDir: string; cleanedMessage: string; error?: string } {
     // Check for [/path] prefix override
     const pathMatch = message.match(/^\[([^\]]+)\]\s*/);
     if (pathMatch && pathMatch[1]) {
+        let dir = pathMatch[1];
+        // Expand ~ to home directory
+        if (dir.startsWith('~')) {
+            dir = dir.replace('~', homedir());
+        }
+        const validationError = validateWorkingDir(dir);
+        if (validationError) {
+            return {
+                workingDir: '',
+                cleanedMessage: message.slice(pathMatch[0].length),
+                error: validationError
+            };
+        }
         return {
-            workingDir: pathMatch[1],
+            workingDir: resolve(dir),
             cleanedMessage: message.slice(pathMatch[0].length)
         };
     }
 
-    // Check channel config
-    const channelConfig = getChannelConfig(channelId);
+    // Check channel config (cached)
+    const channelConfig = getChannelConfigCached(channelId);
     if (channelConfig?.working_dir) {
         return { workingDir: channelConfig.working_dir, cleanedMessage: message };
     }
@@ -63,22 +115,29 @@ const client = new Client({
 client.once(Events.ClientReady, async (c) => {
     log(`Logged in as ${c.user.tag}`);
 
-    // Register slash commands
-    const command = new SlashCommandBuilder()
-        .setName('cord')
-        .setDescription('Configure Cord bot')
-        .addSubcommand(sub =>
-            sub.setName('config')
-               .setDescription('Configure channel settings')
-               .addStringOption(opt =>
-                   opt.setName('dir')
-                      .setDescription('Working directory for Claude in this channel')
-                      .setRequired(true)
-               )
-        );
+    // Register slash commands (only if not already registered)
+    const existingCommands = await c.application?.commands.fetch();
+    const cordCommand = existingCommands?.find(cmd => cmd.name === 'cord');
 
-    await c.application?.commands.create(command);
-    log('Slash commands registered');
+    if (!cordCommand) {
+        const command = new SlashCommandBuilder()
+            .setName('cord')
+            .setDescription('Configure Cord bot')
+            .addSubcommand(sub =>
+                sub.setName('config')
+                   .setDescription('Configure channel settings')
+                   .addStringOption(opt =>
+                       opt.setName('dir')
+                          .setDescription('Working directory for Claude in this channel')
+                          .setRequired(true)
+                   )
+            );
+
+        await c.application?.commands.create(command);
+        log('Slash commands registered');
+    } else {
+        log('Slash commands already registered');
+    }
 
     // Start HTTP API server
     const apiPort = parseInt(process.env.API_PORT || '2643');
@@ -98,14 +157,18 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
                 dir = dir.replace('~', homedir());
             }
 
-            // Validate path exists
-            if (!existsSync(dir)) {
+            // Validate path against allowlist and check existence
+            const validationError = validateWorkingDir(dir);
+            if (validationError) {
                 await interaction.reply({
-                    content: `Directory not found: \`${dir}\``,
+                    content: validationError,
                     ephemeral: true
                 });
                 return;
             }
+
+            // Resolve to absolute path before storing
+            dir = resolve(dir);
 
             setChannelConfig(interaction.channelId, dir);
             await interaction.reply({
@@ -189,7 +252,7 @@ client.on(Events.MessageCreate, async (message: Message) => {
 
         // Use stored working dir or fall back to channel config / env / cwd
         const workingDir = mapping.working_dir ||
-            getChannelConfig(thread.parentId || '')?.working_dir ||
+            getChannelConfigCached(thread.parentId || '')?.working_dir ||
             process.env.CLAUDE_WORKING_DIR ||
             process.cwd();
 
@@ -216,7 +279,13 @@ client.on(Events.MessageCreate, async (message: Message) => {
 
     // Extract message content and resolve working directory
     const rawText = message.content.replace(/<@!?\d+>/g, '').trim();
-    const { workingDir, cleanedMessage } = resolveWorkingDir(rawText, message.channelId);
+    const { workingDir, cleanedMessage, error: workingDirError } = resolveWorkingDir(rawText, message.channelId);
+
+    // If path override validation failed, reply with error
+    if (workingDirError) {
+        await message.reply(workingDirError);
+        return;
+    }
 
     log(`Working directory: ${workingDir}`);
 

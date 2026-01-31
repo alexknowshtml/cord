@@ -54,10 +54,28 @@ db.run(`
 
 console.log(`[db] SQLite database ready at ${DB_PATH}`);
 
+// In-memory cache for channel configs (TTL: 5 minutes)
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const channelConfigCache = new Map<string, { data: { working_dir: string | null } | null; expiresAt: number }>();
+
 // Helper functions for channel config
-export function getChannelConfig(channelId: string): { working_dir: string | null } | null {
+function getChannelConfig(channelId: string): { working_dir: string | null } | null {
     return db.query('SELECT working_dir FROM channels WHERE channel_id = ?')
         .get(channelId) as { working_dir: string | null } | null;
+}
+
+export function getChannelConfigCached(channelId: string): { working_dir: string | null } | null {
+    const cached = channelConfigCache.get(channelId);
+    const now = Date.now();
+
+    if (cached && cached.expiresAt > now) {
+        return cached.data;
+    }
+
+    // Cache miss or expired - fetch from DB
+    const data = getChannelConfig(channelId);
+    channelConfigCache.set(channelId, { data, expiresAt: now + CACHE_TTL_MS });
+    return data;
 }
 
 export function setChannelConfig(channelId: string, workingDir: string): void {
@@ -65,10 +83,7 @@ export function setChannelConfig(channelId: string, workingDir: string): void {
         INSERT INTO channels (channel_id, working_dir) VALUES (?, ?)
         ON CONFLICT(channel_id) DO UPDATE SET working_dir = ?, updated_at = CURRENT_TIMESTAMP
     `, [channelId, workingDir, workingDir]);
-}
 
-export function getThreadWorkingDir(threadId: string): string | null {
-    const result = db.query('SELECT working_dir FROM threads WHERE thread_id = ?')
-        .get(threadId) as { working_dir: string | null } | null;
-    return result?.working_dir ?? null;
+    // Invalidate cache
+    channelConfigCache.delete(channelId);
 }
