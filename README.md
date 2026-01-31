@@ -150,6 +150,10 @@ Cord also exposes an HTTP API on port 2643 for external scripts and webhooks.
 
 See [skills/cord/HTTP-API.md](./skills/cord/HTTP-API.md) for API documentation.
 
+## Privacy
+
+Cord stores only thread-to-session mappings and channel configuration (working directories). **No message content, user data, or conversation history is persisted.** Messages pass through the Redis queue transiently and are discarded after processing.
+
 ## License
 
 MIT
