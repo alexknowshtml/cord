@@ -39,4 +39,5 @@ export interface ClaudeJob {
     resume: boolean;
     userId: string;
     username: string;
+    workingDir?: string;
 }

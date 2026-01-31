@@ -21,6 +21,7 @@ interface SpawnOptions {
     sessionId: string;
     resume: boolean;
     systemPrompt?: string;
+    workingDir?: string;
 }
 
 /**
@@ -45,9 +46,11 @@ function getDatetimeContext(): string {
  * Spawn Claude CLI and return the response
  */
 export async function spawnClaude(options: SpawnOptions): Promise<string> {
-    const { prompt, sessionId, resume, systemPrompt } = options;
+    const { prompt, sessionId, resume, systemPrompt, workingDir } = options;
 
+    const cwd = workingDir || process.env.CLAUDE_WORKING_DIR || process.cwd();
     log(`Spawning Claude - Session: ${sessionId}, Resume: ${resume}`);
+    log(`Working directory: ${cwd}`);
 
     // Build CLI arguments
     const args = ['claude'];
@@ -79,7 +82,7 @@ export async function spawnClaude(options: SpawnOptions): Promise<string> {
 
     // Spawn the process
     const proc = Bun.spawn(args, {
-        cwd: process.env.CLAUDE_WORKING_DIR || process.cwd(),
+        cwd,
         env: {
             ...process.env,
             TZ: TIMEZONE,
