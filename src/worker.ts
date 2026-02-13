@@ -10,7 +10,7 @@
 import { Worker, Job } from 'bullmq';
 import IORedis from 'ioredis';
 import { spawnClaude } from './spawner.js';
-import { sendToThread } from './discord.js';
+import { sendToThread, sendTyping } from './discord.js';
 import type { ClaudeJob } from './queue.js';
 
 const log = (msg: string) => process.stdout.write(`[worker] ${msg}\n`);
@@ -29,6 +29,12 @@ const worker = new Worker<ClaudeJob>(
         log(`Processing job ${job.id} for ${username}`);
         log(`Session: ${sessionId}, Resume: ${resume}`);
 
+        // Keep typing indicator alive while Claude processes
+        const typingInterval = setInterval(() => {
+            sendTyping(threadId).catch(() => {});
+        }, 8000);
+        sendTyping(threadId).catch(() => {});
+
         try {
             // Spawn Claude and get response
             const response = await spawnClaude({
@@ -38,6 +44,8 @@ const worker = new Worker<ClaudeJob>(
                 workingDir,
             });
 
+            clearInterval(typingInterval);
+
             // Send response to Discord thread
             await sendToThread(threadId, response);
 
@@ -45,6 +53,7 @@ const worker = new Worker<ClaudeJob>(
             return { success: true, responseLength: response.length };
 
         } catch (error) {
+            clearInterval(typingInterval);
             log(`Job ${job.id} failed: ${error}`);
 
             // Send error message to thread
